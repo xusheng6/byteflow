@@ -90,17 +90,12 @@ class OutputNode(ByteFlowNode):
         length = len(self._data)
         self.set_property('length', f'{length} bytes')
 
-        # Update preview - try text first, fall back to hex
+        # Update preview - always show hex
         if self._data:
             preview_data = self._data[:self.PREVIEW_BYTES]
-            try:
-                preview = preview_data.decode('utf-8')
-                if len(self._data) > self.PREVIEW_BYTES:
-                    preview += '...'
-            except UnicodeDecodeError:
-                preview = preview_data.hex()
-                if len(self._data) > self.PREVIEW_BYTES:
-                    preview += '...'
+            preview = preview_data.hex()
+            if len(self._data) > self.PREVIEW_BYTES:
+                preview += '...'
             self.set_property('preview', preview)
         else:
             self.set_property('preview', '')

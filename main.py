@@ -52,22 +52,18 @@ class PanEventFilter(QtCore.QObject):
         return False
 
 
-class OutputViewer(QtWidgets.QWidget):
-    """Panel for viewing output node contents."""
+class SingleOutputViewer(QtWidgets.QWidget):
+    """Widget for viewing a single output node's contents."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
-        # Header
-        header = QtWidgets.QLabel('Output Viewer')
-        header.setStyleSheet('font-weight: bold; padding: 5px; background: #333; color: #fff;')
-        layout.addWidget(header)
-
-        # Info bar
-        self.info_label = QtWidgets.QLabel('No output selected')
-        self.info_label.setStyleSheet('padding: 3px; background: #2a2a2a; color: #aaa;')
+        # Info bar (node name + size)
+        self.info_label = QtWidgets.QLabel('No output')
+        self.info_label.setStyleSheet('padding: 3px; background: #2a2a2a; color: #aaa; font-weight: bold;')
         layout.addWidget(self.info_label)
 
         # Text display
@@ -84,15 +80,13 @@ class OutputViewer(QtWidgets.QWidget):
             self.text_display.setPlainText('')
             return
 
-        # Show info
         self.info_label.setText(f'{node_name}: {len(data)} bytes')
 
-        # Try to decode as text, fall back to hex representation
+        # Try to decode as text, fall back to hex dump
         try:
             text = data.decode('utf-8')
             self.text_display.setPlainText(text)
         except UnicodeDecodeError:
-            # Show as hex dump for binary data
             hex_lines = []
             for i in range(0, len(data), 16):
                 chunk = data[i:i+16]
@@ -101,10 +95,60 @@ class OutputViewer(QtWidgets.QWidget):
                 hex_lines.append(f'{i:08x}  {hex_part:<48}  {ascii_part}')
             self.text_display.setPlainText('\n'.join(hex_lines))
 
+
+class OutputViewerPanel(QtWidgets.QWidget):
+    """Panel for viewing multiple output nodes simultaneously."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        # Header
+        header = QtWidgets.QLabel('Output Viewer')
+        header.setStyleSheet('font-weight: bold; padding: 5px; background: #333; color: #fff;')
+        layout.addWidget(header)
+
+        # Splitter to show multiple outputs vertically
+        self.splitter = QtWidgets.QSplitter(QtCore.Qt.Vertical)
+        layout.addWidget(self.splitter)
+
+        # Store viewer widgets keyed by node id
+        self.viewers = {}
+
+    def update_outputs(self, output_nodes):
+        """Update the panel to show all output nodes."""
+        # Get current node ids
+        current_ids = set(self.viewers.keys())
+        new_ids = set(node.id for node in output_nodes)
+
+        # Remove viewers for nodes that no longer exist
+        for node_id in current_ids - new_ids:
+            viewer = self.viewers.pop(node_id)
+            viewer.setParent(None)
+            viewer.deleteLater()
+
+        # Add viewers for new nodes
+        for node in output_nodes:
+            if node.id not in self.viewers:
+                viewer = SingleOutputViewer()
+                self.viewers[node.id] = viewer
+                self.splitter.addWidget(viewer)
+
+        # Update all viewers with current data
+        for node in output_nodes:
+            viewer = self.viewers.get(node.id)
+            if viewer:
+                data = node.get_data()
+                viewer.show_data(data, node.name())
+
     def clear(self):
-        """Clear the viewer."""
-        self.info_label.setText('No output selected')
-        self.text_display.setPlainText('')
+        """Clear all viewers."""
+        for viewer in self.viewers.values():
+            viewer.setParent(None)
+            viewer.deleteLater()
+        self.viewers.clear()
 
 
 class ByteFlowApp:
@@ -132,18 +176,19 @@ class ByteFlowApp:
         central = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(central)
 
-        # Create vertical splitter for graph and output viewer
-        splitter = QtWidgets.QSplitter(QtCore.Qt.Vertical)
+        # Create horizontal splitter for graph and output viewer (viewer on right)
+        splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
 
         # Node graph widget
         graph_widget = self.graph.widget
         splitter.addWidget(graph_widget)
 
-        # Output viewer panel
-        self.output_viewer = OutputViewer()
+        # Output viewer panel (on the right)
+        self.output_viewer = OutputViewerPanel()
+        self.output_viewer.setMinimumWidth(300)
         splitter.addWidget(self.output_viewer)
 
-        splitter.setSizes([600, 200])
+        splitter.setSizes([900, 400])
         layout.addWidget(splitter)
 
         # Button bar
@@ -199,7 +244,7 @@ class ByteFlowApp:
         self.graph.port_connected.connect(self.on_port_connected)
         self.graph.port_disconnected.connect(self.on_port_disconnected)
         self.graph.node_double_clicked.connect(self.on_node_double_clicked)
-        self.graph.node_selected.connect(self.on_node_selected)
+        self.graph.property_changed.connect(self.on_property_changed)
 
         # Enable left-click drag to pan the view
         viewer = self.graph.viewer()
@@ -304,23 +349,9 @@ class ByteFlowApp:
         self.update_output_viewer()
 
     def update_output_viewer(self):
-        """Update output viewer with selected or first output node."""
-        # Try selected nodes first
-        selected = self.graph.selected_nodes()
-        for node in selected:
-            if isinstance(node, OutputNode):
-                data = node.get_data()
-                self.output_viewer.show_data(data, node.name())
-                return
-
-        # Fall back to first output node
-        for node in self.graph.all_nodes():
-            if isinstance(node, OutputNode):
-                data = node.get_data()
-                self.output_viewer.show_data(data, node.name())
-                return
-
-        self.output_viewer.clear()
+        """Update output viewer with all output nodes."""
+        output_nodes = [node for node in self.graph.all_nodes() if isinstance(node, OutputNode)]
+        self.output_viewer.update_outputs(output_nodes)
 
     def clear_graph(self):
         """Clear all nodes from the graph."""
@@ -407,12 +438,10 @@ class ByteFlowApp:
         if node:
             self.show_properties_dialog(node)
 
-    def on_node_selected(self, node_id):
-        """Handle node selection - update output viewer if output node."""
-        node = self.graph.get_node_by_id(node_id)
-        if node and isinstance(node, OutputNode):
-            data = node.get_data()
-            self.output_viewer.show_data(data, node.name())
+    def on_property_changed(self, node_id, prop_name, prop_value):
+        """Handle property change - trigger auto-process."""
+        if self.auto_process:
+            self.process_graph()
 
     def show_properties_dialog(self, node):
         """Show a properties dialog for the node."""
