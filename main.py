@@ -3,7 +3,6 @@
 
 import sys
 from PySide6 import QtWidgets, QtCore, QtGui
-from PySide6.QtCore import QRectF
 from NodeGraphQt import NodeGraph, PropertiesBinWidget
 
 from nodes import (
@@ -22,29 +21,28 @@ class PanEventFilter(QtCore.QObject):
         self.last_pos = None
 
     def eventFilter(self, obj, event):
-        if event.type() == QtCore.QEvent.MouseButtonPress:
+        event_type = event.type()
+
+        if event_type == QtCore.QEvent.MouseButtonPress:
             if event.button() == QtCore.Qt.LeftButton:
-                # Check if clicking on background
                 item = self.viewer.itemAt(event.position().toPoint())
                 if item is None:
                     self.panning = True
-                    self.last_pos = event.position()
+                    self.last_pos = event.pos()
                     return True
 
-        elif event.type() == QtCore.QEvent.MouseMove:
+        elif event_type == QtCore.QEvent.MouseMove:
             if self.panning and self.last_pos is not None:
-                pos = event.position()
-                delta_x = pos.x() - self.last_pos.x()
-                delta_y = pos.y() - self.last_pos.y()
-                self.last_pos = pos
-                # Pan using scrollbars directly to preserve zoom
-                h_bar = self.viewer.horizontalScrollBar()
-                v_bar = self.viewer.verticalScrollBar()
-                h_bar.setValue(h_bar.value() - int(delta_x))
-                v_bar.setValue(v_bar.value() - int(delta_y))
+                # Map to scene coordinates like NodeGraphQt does internally
+                previous_pos = self.viewer.mapToScene(self.last_pos)
+                current_pos = self.viewer.mapToScene(event.pos())
+                delta = previous_pos - current_pos
+                self.last_pos = event.pos()
+                # Use NodeGraphQt's native pan method with scene delta
+                self.viewer._set_viewer_pan(delta.x(), delta.y())
                 return True
 
-        elif event.type() == QtCore.QEvent.MouseButtonRelease:
+        elif event_type == QtCore.QEvent.MouseButtonRelease:
             if event.button() == QtCore.Qt.LeftButton and self.panning:
                 self.panning = False
                 self.last_pos = None
@@ -209,6 +207,7 @@ class ByteFlowApp:
             return
 
         # Calculate bounding rect from node view items
+        from PySide6.QtCore import QRectF
         rect = QRectF()
         for node in all_nodes:
             if node.view:
@@ -221,8 +220,9 @@ class ByteFlowApp:
         padding = 50
         rect.adjust(-padding, -padding, padding, padding)
 
-        # Fit the rect in view
-        viewer.fitInView(rect, QtCore.Qt.KeepAspectRatio)
+        # Update NodeGraphQt's internal scene range so panning works correctly
+        viewer._scene_range = rect
+        viewer._update_scene()
 
     def delete_selected(self):
         """Delete selected nodes."""
