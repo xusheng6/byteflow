@@ -518,11 +518,11 @@ class ByteFlowApp:
         self.tab_widget.setMovable(True)
         self.tab_widget.tabCloseRequested.connect(self.close_tab)
 
-        # Add "+" button next to tabs (like browsers)
-        self.new_tab_button = QtWidgets.QToolButton(self.tab_widget.tabBar())
-        self.new_tab_button.setText('+')
-        self.new_tab_button.setFixedSize(28, 28)
-        self.new_tab_button.clicked.connect(self.new_tab)
+        # Add "+" button next to tabs using a dummy tab approach
+        # We'll add a non-closable "+" tab at the end that creates new tabs when clicked
+        self._plus_tab_index = -1
+        self._last_valid_index = 0
+        self.tab_widget.currentChanged.connect(self._on_tab_changed)
 
         layout.addWidget(self.tab_widget)
 
@@ -627,27 +627,42 @@ class ByteFlowApp:
         self._tab_counter += 1
         tab = GraphTab(self)
         name = f'Graph {self._tab_counter}'
-        self.tab_widget.addTab(tab, name)
+
+        # Insert before the + tab if it exists
+        if self._plus_tab_index >= 0:
+            self.tab_widget.insertTab(self._plus_tab_index, tab, name)
+            self._plus_tab_index += 1  # + tab moved one position
+        else:
+            self.tab_widget.addTab(tab, name)
+
         self.tab_widget.setCurrentWidget(tab)
 
         if demo:
             self._create_demo_graph(tab)
 
-        # Update + button position
-        QtCore.QTimer.singleShot(10, self._update_new_tab_button_position)
         return tab
 
     def close_tab(self, index):
         """Close a tab by index."""
-        if self.tab_widget.count() > 1:
+        # Don't close the + tab
+        if index == self._plus_tab_index:
+            return
+
+        # Count real tabs (excluding + tab)
+        real_tab_count = self.tab_widget.count() - 1 if self._plus_tab_index >= 0 else self.tab_widget.count()
+
+        if real_tab_count > 1:
             widget = self.tab_widget.widget(index)
             self.tab_widget.removeTab(index)
             widget.deleteLater()
-            # Update + button position
-            QtCore.QTimer.singleShot(10, self._update_new_tab_button_position)
+            # Update + tab index if needed
+            if index < self._plus_tab_index:
+                self._plus_tab_index -= 1
         else:
             # Don't close the last tab, just clear it
-            self.current_tab().clear_graph()
+            tab = self.current_tab()
+            if isinstance(tab, GraphTab):
+                tab.clear_graph()
 
     def close_current_tab(self):
         """Close the current tab."""
@@ -746,22 +761,31 @@ class ByteFlowApp:
 
         QtCore.QTimer.singleShot(100, tab.fit_to_view)
 
-    def _update_new_tab_button_position(self):
-        """Position the + button right after the last tab."""
-        tab_bar = self.tab_widget.tabBar()
-        count = tab_bar.count()
-        if count > 0:
-            last_tab_rect = tab_bar.tabRect(count - 1)
-            x = last_tab_rect.right() + 5
-            y = (tab_bar.height() - self.new_tab_button.height()) // 2
-            self.new_tab_button.move(x, y)
-        self.new_tab_button.show()
+    def _on_tab_changed(self, index):
+        """Handle tab change - create new tab if + tab is selected."""
+        if index == self._plus_tab_index:
+            # Switch back to last valid tab, then create new tab
+            self.tab_widget.setCurrentIndex(self._last_valid_index)
+            self.new_tab()
+        elif index >= 0:
+            self._last_valid_index = index
+
+    def _update_plus_tab(self):
+        """Ensure the + tab is at the end."""
+        # Remove existing + tab if any
+        if self._plus_tab_index >= 0 and self._plus_tab_index < self.tab_widget.count():
+            self.tab_widget.removeTab(self._plus_tab_index)
+
+        # Add + tab at the end
+        self._plus_tab_index = self.tab_widget.addTab(QtWidgets.QWidget(), '+')
+        # Make it non-closable
+        self.tab_widget.tabBar().setTabButton(self._plus_tab_index, QtWidgets.QTabBar.RightSide, None)
+        self.tab_widget.tabBar().setTabButton(self._plus_tab_index, QtWidgets.QTabBar.LeftSide, None)
 
     def run(self):
         """Run the application."""
         self.window.show()
-        # Position the + button after window is shown
-        QtCore.QTimer.singleShot(50, self._update_new_tab_button_position)
+        self._update_plus_tab()
         return self.app.exec()
 
 
