@@ -4,6 +4,7 @@ import base64
 
 from Crypto.Cipher import AES, ARC4
 from Crypto.Util.Padding import pad, unpad
+from Crypto.Util import Counter
 
 from .base import ByteFlowNode
 
@@ -178,11 +179,12 @@ class AESNode(ByteFlowNode):
                     except ValueError:
                         result = decrypted
             elif 'CTR' in mode_str:
-                # CTR mode uses nonce (first 8 bytes of IV)
-                if len(iv) < 8:
-                    iv = iv.ljust(8, b'\x00')
-                nonce = iv[:8]
-                cipher = AES.new(key, AES.MODE_CTR, nonce=nonce)
+                # CTR mode uses full 16-byte IV as initial counter value
+                if len(iv) != 16:
+                    iv = iv.ljust(16, b'\x00')[:16]
+                # Create counter with IV as initial value (matches CyberChef behavior)
+                ctr = Counter.new(128, initial_value=int.from_bytes(iv, 'big'))
+                cipher = AES.new(key, AES.MODE_CTR, counter=ctr)
                 # CTR encrypt and decrypt are the same operation
                 result = cipher.encrypt(data)
             else:  # CBC
