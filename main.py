@@ -55,16 +55,53 @@ class PanEventFilter(QtCore.QObject):
 class SingleOutputViewer(QtWidgets.QWidget):
     """Widget for viewing a single output node's contents."""
 
+    VIEW_RAW = 0
+    VIEW_HEX = 1
+    VIEW_HEXDUMP = 2
+
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._data = b''
+        self._node_name = ''
+
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # Info bar (node name + size)
+        # Header bar with info, view mode, and copy buttons
+        header = QtWidgets.QHBoxLayout()
+        header.setContentsMargins(3, 3, 3, 3)
+        header.setSpacing(5)
+
         self.info_label = QtWidgets.QLabel('No output')
-        self.info_label.setStyleSheet('padding: 3px; background: #2a2a2a; color: #aaa; font-weight: bold;')
-        layout.addWidget(self.info_label)
+        self.info_label.setStyleSheet('color: #aaa; font-weight: bold;')
+        header.addWidget(self.info_label)
+
+        header.addStretch()
+
+        # View as dropdown
+        header.addWidget(QtWidgets.QLabel('View:'))
+        self.view_combo = QtWidgets.QComboBox()
+        self.view_combo.addItems(['Raw', 'Hex', 'Hex Dump'])
+        self.view_combo.setFixedWidth(80)
+        self.view_combo.currentIndexChanged.connect(self._refresh_display)
+        header.addWidget(self.view_combo)
+
+        # Copy buttons
+        copy_btn = QtWidgets.QPushButton('Copy')
+        copy_btn.setFixedWidth(50)
+        copy_btn.clicked.connect(self._copy_displayed)
+        header.addWidget(copy_btn)
+
+        copy_raw_btn = QtWidgets.QPushButton('Copy Raw')
+        copy_raw_btn.setFixedWidth(70)
+        copy_raw_btn.clicked.connect(self._copy_raw)
+        header.addWidget(copy_raw_btn)
+
+        header_widget = QtWidgets.QWidget()
+        header_widget.setLayout(header)
+        header_widget.setStyleSheet('background: #2a2a2a;')
+        layout.addWidget(header_widget)
 
         # Text display
         self.text_display = QtWidgets.QPlainTextEdit()
@@ -75,15 +112,45 @@ class SingleOutputViewer(QtWidgets.QWidget):
 
     def show_data(self, data: bytes, node_name: str = ''):
         """Display data in the viewer."""
-        if not data:
-            self.info_label.setText(f'{node_name}: empty')
+        self._data = data
+        self._node_name = node_name
+        self._refresh_display()
+
+    def _refresh_display(self):
+        """Refresh the display based on current view mode."""
+        if not self._data:
+            self.info_label.setText(f'{self._node_name}: empty')
             self.text_display.setPlainText('')
             return
 
-        self.info_label.setText(f'{node_name}: {len(data)} bytes')
+        self.info_label.setText(f'{self._node_name}: {len(self._data)} bytes')
 
-        # Show raw bytes as text (latin-1 for 1:1 byte mapping)
-        self.text_display.setPlainText(data.decode('latin-1'))
+        view_mode = self.view_combo.currentIndex()
+        if view_mode == self.VIEW_RAW:
+            # Raw bytes as text (latin-1 for 1:1 mapping)
+            self.text_display.setPlainText(self._data.decode('latin-1'))
+        elif view_mode == self.VIEW_HEX:
+            # Plain hex string
+            self.text_display.setPlainText(self._data.hex())
+        else:  # VIEW_HEXDUMP
+            # Hex dump with offset, hex, and ASCII
+            lines = []
+            for i in range(0, len(self._data), 16):
+                chunk = self._data[i:i+16]
+                hex_part = ' '.join(f'{b:02x}' for b in chunk)
+                ascii_part = ''.join(chr(b) if 32 <= b < 127 else '.' for b in chunk)
+                lines.append(f'{i:08x}  {hex_part:<48}  {ascii_part}')
+            self.text_display.setPlainText('\n'.join(lines))
+
+    def _copy_displayed(self):
+        """Copy the displayed text to clipboard."""
+        clipboard = QtWidgets.QApplication.clipboard()
+        clipboard.setText(self.text_display.toPlainText())
+
+    def _copy_raw(self):
+        """Copy the raw bytes to clipboard (as latin-1 text)."""
+        clipboard = QtWidgets.QApplication.clipboard()
+        clipboard.setText(self._data.decode('latin-1'))
 
 
 class OutputViewerPanel(QtWidgets.QWidget):
