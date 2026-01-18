@@ -68,19 +68,42 @@ class FileInputNode(ByteFlowNode):
 
 
 class OutputNode(ByteFlowNode):
-    """Output node - data sink that sends output to the Output Viewer panel."""
+    """Output node - shows preview, full output in Output Viewer panel."""
 
     __identifier__ = 'byteflow.io'
     NODE_NAME = 'Output'
 
+    PREVIEW_BYTES = 64  # Max bytes to show in preview
+
     def __init__(self):
         super().__init__()
         self.add_input('input')
+        self.add_text_input('length', 'Length', text='0 bytes')
+        self.add_text_input('preview', 'Preview', text='')
         self._data = b''
         self.set_color(100, 100, 150)
 
     def process(self):
         self._data = self.get_input_data('input')
+
+        # Update length display
+        length = len(self._data)
+        self.set_property('length', f'{length} bytes')
+
+        # Update preview - try text first, fall back to hex
+        if self._data:
+            preview_data = self._data[:self.PREVIEW_BYTES]
+            try:
+                preview = preview_data.decode('utf-8')
+                if len(self._data) > self.PREVIEW_BYTES:
+                    preview += '...'
+            except UnicodeDecodeError:
+                preview = preview_data.hex()
+                if len(self._data) > self.PREVIEW_BYTES:
+                    preview += '...'
+            self.set_property('preview', preview)
+        else:
+            self.set_property('preview', '')
 
     def get_data(self) -> bytes:
         """Get the data flowing into this output node."""
