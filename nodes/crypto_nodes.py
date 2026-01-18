@@ -46,28 +46,16 @@ class XORNode(ByteFlowNode):
     __identifier__ = 'byteflow.crypto'
     NODE_NAME = 'XOR'
 
-    # Mapping of input port names to property names they override
-    PORT_TO_PROPERTY = {'key': 'key_hex'}
-
     def __init__(self):
         super().__init__()
         self.add_input('data')
         self.add_input('key')
         self.add_output('output')
-        self.add_text_input('key_hex', 'Key (hex)', text='00')
         self.set_color(180, 70, 70)
 
     def process(self):
         data = self.get_input_data('data')
-
-        # Get key from connected port or from text input
         key = self.get_input_data('key')
-        if not key:
-            key_hex = self.get_property('key_hex')
-            try:
-                key = bytes.fromhex(key_hex.replace(' ', ''))
-            except ValueError:
-                key = b'\x00'
 
         if not data or not key:
             self.set_output_data('output', b'')
@@ -84,27 +72,16 @@ class RC4Node(ByteFlowNode):
     __identifier__ = 'byteflow.crypto'
     NODE_NAME = 'RC4'
 
-    # Mapping of input port names to property names they override
-    PORT_TO_PROPERTY = {'key': 'key_hex'}
-
     def __init__(self):
         super().__init__()
         self.add_input('data')
         self.add_input('key')
         self.add_output('output')
-        self.add_text_input('key_hex', 'Key (hex)', text='00')
         self.set_color(70, 130, 180)
 
     def process(self):
         data = self.get_input_data('data')
-
         key = self.get_input_data('key')
-        if not key:
-            key_hex = self.get_property('key_hex')
-            try:
-                key = bytes.fromhex(key_hex.replace(' ', ''))
-            except ValueError:
-                key = b'\x00'
 
         if not data or not key:
             self.set_output_data('output', b'')
@@ -121,44 +98,29 @@ class AESNode(ByteFlowNode):
     __identifier__ = 'byteflow.crypto'
     NODE_NAME = 'AES'
 
-    # Mapping of input port names to property names they override
-    PORT_TO_PROPERTY = {'key': 'key_hex', 'iv': 'iv_hex'}
-
     def __init__(self):
         super().__init__()
         self.add_input('data')
         self.add_input('key')
         self.add_input('iv')
         self.add_output('output')
-        self.add_text_input('key_hex', 'Key (hex, 16/24/32 bytes)', text='00000000000000000000000000000000')
-        self.add_text_input('iv_hex', 'IV (hex, 16 bytes)', text='00000000000000000000000000000000')
         self.add_combo_menu('mode', 'Mode', items=['CBC Encrypt', 'CBC Decrypt', 'ECB Encrypt', 'ECB Decrypt', 'CTR'])
         self.set_color(70, 180, 70)
 
     def process(self):
         data = self.get_input_data('data')
-
-        # Get key
         key = self.get_input_data('key')
-        if not key:
-            key_hex = self.get_property('key_hex')
-            try:
-                key = bytes.fromhex(key_hex.replace(' ', ''))
-            except ValueError:
-                key = b'\x00' * 16
-
-        # Get IV
         iv = self.get_input_data('iv')
-        if not iv:
-            iv_hex = self.get_property('iv_hex')
-            try:
-                iv = bytes.fromhex(iv_hex.replace(' ', ''))
-            except ValueError:
-                iv = b'\x00' * 16
 
         if not data:
             self.set_output_data('output', b'')
             return
+
+        # Default key/iv if not provided
+        if not key:
+            key = b'\x00' * 16
+        if not iv:
+            iv = b'\x00' * 16
 
         # Ensure valid key length
         if len(key) not in (16, 24, 32):

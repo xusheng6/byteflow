@@ -748,16 +748,21 @@ class ByteFlowApp:
         text_input.set_pos(-200, 0)
         text_input.set_property('text_data', 'Hello ByteFlow!')
 
+        key_input = tab.graph.create_node('byteflow.io.HexInputNode')
+        key_input.set_name('Key')
+        key_input.set_pos(-200, 100)
+        key_input.set_property('hex_data', 'FF')
+
         xor_node = tab.graph.create_node('byteflow.crypto.XORNode')
-        xor_node.set_name('XOR Encrypt')
-        xor_node.set_pos(100, 0)
-        xor_node.set_property('key_hex', 'FF')
+        xor_node.set_name('XOR')
+        xor_node.set_pos(100, 50)
 
         output = tab.graph.create_node('byteflow.io.OutputNode')
         output.set_name('Result')
-        output.set_pos(400, 0)
+        output.set_pos(350, 50)
 
-        text_input.output(0).connect_to(xor_node.input(0))
+        text_input.output(0).connect_to(xor_node.input(0))  # data
+        key_input.output(0).connect_to(xor_node.input(1))   # key
         xor_node.output(0).connect_to(output.input(0))
 
         QtCore.QTimer.singleShot(100, tab.fit_to_view)
