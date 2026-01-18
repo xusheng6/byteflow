@@ -82,18 +82,8 @@ class SingleOutputViewer(QtWidgets.QWidget):
 
         self.info_label.setText(f'{node_name}: {len(data)} bytes')
 
-        # Try to decode as text, fall back to hex dump
-        try:
-            text = data.decode('utf-8')
-            self.text_display.setPlainText(text)
-        except UnicodeDecodeError:
-            hex_lines = []
-            for i in range(0, len(data), 16):
-                chunk = data[i:i+16]
-                hex_part = ' '.join(f'{b:02x}' for b in chunk)
-                ascii_part = ''.join(chr(b) if 32 <= b < 127 else '.' for b in chunk)
-                hex_lines.append(f'{i:08x}  {hex_part:<48}  {ascii_part}')
-            self.text_display.setPlainText('\n'.join(hex_lines))
+        # Show raw bytes as text (latin-1 for 1:1 byte mapping)
+        self.text_display.setPlainText(data.decode('latin-1'))
 
 
 class OutputViewerPanel(QtWidgets.QWidget):

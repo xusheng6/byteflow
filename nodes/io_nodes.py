@@ -90,10 +90,11 @@ class OutputNode(ByteFlowNode):
         length = len(self._data)
         self.set_property('length', f'{length} bytes')
 
-        # Update preview - always show hex
+        # Update preview - show raw bytes as text
         if self._data:
             preview_data = self._data[:self.PREVIEW_BYTES]
-            preview = preview_data.hex()
+            # Use latin-1 for 1:1 byte to char mapping (no conversion errors)
+            preview = preview_data.decode('latin-1')
             if len(self._data) > self.PREVIEW_BYTES:
                 preview += '...'
             self.set_property('preview', preview)
