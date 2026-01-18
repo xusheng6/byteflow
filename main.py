@@ -7,6 +7,9 @@ from NodeGraphQt import NodeGraph, PropertiesBinWidget
 
 from nodes import (
     XORNode, RC4Node, AESNode, Base64Node,
+    MD5Node, SHA1Node, SHA256Node,
+    URLEncodeNode, HexEncodeNode, ROTNode, AtbashNode,
+    ReverseNode, ZlibNode, GzipNode, SubstringNode, RepeatNode,
     HexInputNode, TextInputNode, FileInputNode, OutputNode
 )
 
@@ -156,10 +159,27 @@ class ByteFlowApp:
 
     def register_nodes(self):
         """Register all custom nodes."""
+        # Crypto
         self.graph.register_node(XORNode)
         self.graph.register_node(RC4Node)
         self.graph.register_node(AESNode)
         self.graph.register_node(Base64Node)
+        # Hash
+        self.graph.register_node(MD5Node)
+        self.graph.register_node(SHA1Node)
+        self.graph.register_node(SHA256Node)
+        # Encoding
+        self.graph.register_node(URLEncodeNode)
+        self.graph.register_node(HexEncodeNode)
+        self.graph.register_node(ROTNode)
+        self.graph.register_node(AtbashNode)
+        # Utility
+        self.graph.register_node(ReverseNode)
+        self.graph.register_node(ZlibNode)
+        self.graph.register_node(GzipNode)
+        self.graph.register_node(SubstringNode)
+        self.graph.register_node(RepeatNode)
+        # I/O
         self.graph.register_node(HexInputNode)
         self.graph.register_node(TextInputNode)
         self.graph.register_node(FileInputNode)
@@ -183,6 +203,27 @@ class ByteFlowApp:
         crypto_menu.add_command('RC4', lambda g: self.create_node('byteflow.crypto.RC4Node'))
         crypto_menu.add_command('AES', lambda g: self.create_node('byteflow.crypto.AESNode'))
         crypto_menu.add_command('Base64', lambda g: self.create_node('byteflow.crypto.Base64Node'))
+
+        # Hash submenu
+        hash_menu = graph_menu.add_menu('Hash')
+        hash_menu.add_command('MD5', lambda g: self.create_node('byteflow.hash.MD5Node'))
+        hash_menu.add_command('SHA1', lambda g: self.create_node('byteflow.hash.SHA1Node'))
+        hash_menu.add_command('SHA256', lambda g: self.create_node('byteflow.hash.SHA256Node'))
+
+        # Encoding submenu
+        enc_menu = graph_menu.add_menu('Encoding')
+        enc_menu.add_command('URL Encode', lambda g: self.create_node('byteflow.encoding.URLEncodeNode'))
+        enc_menu.add_command('Hex', lambda g: self.create_node('byteflow.encoding.HexEncodeNode'))
+        enc_menu.add_command('ROT', lambda g: self.create_node('byteflow.encoding.ROTNode'))
+        enc_menu.add_command('Atbash', lambda g: self.create_node('byteflow.encoding.AtbashNode'))
+
+        # Utility submenu
+        util_menu = graph_menu.add_menu('Utility')
+        util_menu.add_command('Reverse', lambda g: self.create_node('byteflow.util.ReverseNode'))
+        util_menu.add_command('Zlib', lambda g: self.create_node('byteflow.util.ZlibNode'))
+        util_menu.add_command('Gzip', lambda g: self.create_node('byteflow.util.GzipNode'))
+        util_menu.add_command('Substring', lambda g: self.create_node('byteflow.util.SubstringNode'))
+        util_menu.add_command('Repeat', lambda g: self.create_node('byteflow.util.RepeatNode'))
 
     def create_node(self, node_type):
         """Create a new node at the cursor position."""
