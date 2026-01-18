@@ -106,7 +106,7 @@ class SingleOutputViewer(QtWidgets.QWidget):
         # Text display
         self.text_display = QtWidgets.QPlainTextEdit()
         self.text_display.setReadOnly(True)
-        self.text_display.setFont(QtGui.QFont('Menlo', 11))
+        self.text_display.setFont(QtGui.QFont('Menlo', 14))
         self.text_display.setStyleSheet('background: #1e1e1e; color: #ddd;')
         layout.addWidget(self.text_display)
 
