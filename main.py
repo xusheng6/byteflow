@@ -115,6 +115,18 @@ class ByteFlowApp:
         fit_btn.setShortcut(QtGui.QKeySequence('F'))
         btn_layout.addWidget(fit_btn)
 
+        btn_layout.addSpacing(20)
+
+        save_btn = QtWidgets.QPushButton('Save')
+        save_btn.clicked.connect(self.save_graph)
+        save_btn.setShortcut(QtGui.QKeySequence.Save)
+        btn_layout.addWidget(save_btn)
+
+        load_btn = QtWidgets.QPushButton('Load')
+        load_btn.clicked.connect(self.load_graph)
+        load_btn.setShortcut(QtGui.QKeySequence.Open)
+        btn_layout.addWidget(load_btn)
+
         # Delete shortcut
         delete_action = QtGui.QAction(self.window)
         delete_action.setShortcuts([QtGui.QKeySequence.Delete, QtGui.QKeySequence('Backspace')])
@@ -128,6 +140,10 @@ class ByteFlowApp:
 
         # Setup custom context menu
         self.setup_context_menu()
+
+        # Connect to port connection signals to update property states
+        self.graph.port_connected.connect(self.on_port_connected)
+        self.graph.port_disconnected.connect(self.on_port_disconnected)
 
         # Enable left-click drag to pan the view
         viewer = self.graph.viewer()
@@ -196,6 +212,32 @@ class ByteFlowApp:
         """Clear all nodes from the graph."""
         self.graph.clear_session()
 
+    def save_graph(self):
+        """Save the graph to a JSON file."""
+        file_path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self.window,
+            'Save Graph',
+            '',
+            'ByteFlow Graph (*.json);;All Files (*)'
+        )
+        if file_path:
+            if not file_path.endswith('.json'):
+                file_path += '.json'
+            self.graph.save_session(file_path)
+
+    def load_graph(self):
+        """Load a graph from a JSON file."""
+        file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self.window,
+            'Load Graph',
+            '',
+            'ByteFlow Graph (*.json);;All Files (*)'
+        )
+        if file_path:
+            self.graph.load_session(file_path)
+            # Update all nodes' property states after loading
+            QtCore.QTimer.singleShot(100, self.update_all_node_properties)
+
     def fit_to_view(self):
         """Fit all nodes in the view."""
         all_nodes = self.graph.all_nodes()
@@ -230,6 +272,34 @@ class ByteFlowApp:
         if selected:
             for node in selected:
                 self.graph.remove_node(node)
+
+    def on_port_connected(self, input_port, output_port):
+        """Handle port connection - disable corresponding property widget."""
+        node = input_port.node()
+        self.update_node_property_state(node)
+
+    def on_port_disconnected(self, input_port, output_port):
+        """Handle port disconnection - re-enable corresponding property widget."""
+        node = input_port.node()
+        self.update_node_property_state(node)
+
+    def update_node_property_state(self, node):
+        """Update property widget states based on port connections."""
+        if not hasattr(node, 'PORT_TO_PROPERTY'):
+            return
+
+        for port_name, prop_name in node.PORT_TO_PROPERTY.items():
+            input_port = node.get_input(port_name)
+            if input_port and input_port.connected_ports():
+                # Port is connected - disable property and show indicator
+                node.set_property(prop_name, '[connected]')
+                node.set_disabled(True) if hasattr(node, 'set_disabled') else None
+            # Note: We don't re-enable here to preserve user's manual input
+
+    def update_all_node_properties(self):
+        """Update all nodes' property states after loading."""
+        for node in self.graph.all_nodes():
+            self.update_node_property_state(node)
 
     def create_demo_graph(self):
         """Create a demo graph showing XOR operation."""

@@ -45,6 +45,9 @@ class XORNode(ByteFlowNode):
     __identifier__ = 'byteflow.crypto'
     NODE_NAME = 'XOR'
 
+    # Mapping of input port names to property names they override
+    PORT_TO_PROPERTY = {'key': 'key_hex'}
+
     def __init__(self):
         super().__init__()
         self.add_input('data')
@@ -80,6 +83,9 @@ class RC4Node(ByteFlowNode):
     __identifier__ = 'byteflow.crypto'
     NODE_NAME = 'RC4'
 
+    # Mapping of input port names to property names they override
+    PORT_TO_PROPERTY = {'key': 'key_hex'}
+
     def __init__(self):
         super().__init__()
         self.add_input('data')
@@ -113,6 +119,9 @@ class AESNode(ByteFlowNode):
 
     __identifier__ = 'byteflow.crypto'
     NODE_NAME = 'AES'
+
+    # Mapping of input port names to property names they override
+    PORT_TO_PROPERTY = {'key': 'key_hex', 'iv': 'iv_hex'}
 
     def __init__(self):
         super().__init__()
