@@ -131,7 +131,7 @@ class AESNode(ByteFlowNode):
         self.add_output('output')
         self.add_text_input('key_hex', 'Key (hex, 16/24/32 bytes)', text='00000000000000000000000000000000')
         self.add_text_input('iv_hex', 'IV (hex, 16 bytes)', text='00000000000000000000000000000000')
-        self.add_combo_menu('mode', 'Mode', items=['CBC Encrypt', 'CBC Decrypt', 'ECB Encrypt', 'ECB Decrypt'])
+        self.add_combo_menu('mode', 'Mode', items=['CBC Encrypt', 'CBC Decrypt', 'ECB Encrypt', 'ECB Decrypt', 'CTR'])
         self.set_color(70, 180, 70)
 
     def process(self):
@@ -168,20 +168,36 @@ class AESNode(ByteFlowNode):
         try:
             if 'ECB' in mode_str:
                 cipher = AES.new(key, AES.MODE_ECB)
-            else:
+                if 'Encrypt' in mode_str:
+                    padded = pad(data, AES.block_size)
+                    result = cipher.encrypt(padded)
+                else:
+                    decrypted = cipher.decrypt(data)
+                    try:
+                        result = unpad(decrypted, AES.block_size)
+                    except ValueError:
+                        result = decrypted
+            elif 'CTR' in mode_str:
+                # CTR mode uses nonce (first 8 bytes of IV)
+                if len(iv) < 8:
+                    iv = iv.ljust(8, b'\x00')
+                nonce = iv[:8]
+                cipher = AES.new(key, AES.MODE_CTR, nonce=nonce)
+                # CTR encrypt and decrypt are the same operation
+                result = cipher.encrypt(data)
+            else:  # CBC
                 if len(iv) != 16:
                     iv = iv.ljust(16, b'\x00')[:16]
                 cipher = AES.new(key, AES.MODE_CBC, iv)
-
-            if 'Encrypt' in mode_str:
-                padded = pad(data, AES.block_size)
-                result = cipher.encrypt(padded)
-            else:
-                decrypted = cipher.decrypt(data)
-                try:
-                    result = unpad(decrypted, AES.block_size)
-                except ValueError:
-                    result = decrypted
+                if 'Encrypt' in mode_str:
+                    padded = pad(data, AES.block_size)
+                    result = cipher.encrypt(padded)
+                else:
+                    decrypted = cipher.decrypt(data)
+                    try:
+                        result = unpad(decrypted, AES.block_size)
+                    except ValueError:
+                        result = decrypted
 
             self.set_output_data('output', result)
         except Exception as e:

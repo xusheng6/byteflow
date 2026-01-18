@@ -162,3 +162,77 @@ class RepeatNode(ByteFlowNode):
             count = 1
 
         self.set_output_data('output', data * count)
+
+
+class TakeBytesNode(ByteFlowNode):
+    """Take bytes from input using start+length or start+end (Python-style indexing).
+
+    Supports negative indices like Python:
+    - Negative start: counts from end (e.g., -5 = 5 bytes from end)
+    - Negative end: counts from end (e.g., -1 = stop 1 before end)
+    - Empty start: from beginning
+    - Empty end/length: to the end
+    """
+
+    __identifier__ = 'byteflow.util'
+    NODE_NAME = 'Take Bytes'
+
+    def __init__(self):
+        super().__init__()
+        self.add_input('data')
+        self.add_output('output')
+        self.add_combo_menu('mode', 'Mode', items=['Start + Length', 'Start + End'])
+        self.add_text_input('start', 'Start (empty=0)', text='')
+        self.add_text_input('param2', 'Length / End (empty=all)', text='')
+        self.set_color(120, 120, 120)
+
+    def process(self):
+        data = self.get_input_data('data')
+        if not data:
+            self.set_output_data('output', b'')
+            return
+
+        mode = self.get_property('mode')
+        start_str = self.get_property('start').strip()
+        param2_str = self.get_property('param2').strip()
+
+        # Parse start (empty = 0 for start+length, None for start+end)
+        if start_str:
+            try:
+                start = int(start_str)
+            except ValueError:
+                start = 0
+        else:
+            start = None if mode == 'Start + End' else 0
+
+        # Parse param2 (length or end)
+        if param2_str:
+            try:
+                param2 = int(param2_str)
+            except ValueError:
+                param2 = None
+        else:
+            param2 = None
+
+        try:
+            if mode == 'Start + Length':
+                # start + length mode
+                if start is None:
+                    start = 0
+                if param2 is None:
+                    result = data[start:]
+                else:
+                    # Handle negative start
+                    if start < 0:
+                        actual_start = len(data) + start
+                    else:
+                        actual_start = start
+                    result = data[actual_start:actual_start + param2]
+            else:
+                # Start + End mode (Python slice)
+                result = data[start:param2]
+
+            self.set_output_data('output', result)
+        except Exception as e:
+            print(f"Take bytes error: {e}")
+            self.set_output_data('output', b'')

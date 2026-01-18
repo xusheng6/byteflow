@@ -9,7 +9,7 @@ from nodes import (
     XORNode, RC4Node, AESNode, Base64Node,
     MD5Node, SHA1Node, SHA256Node,
     URLEncodeNode, HexEncodeNode, ROTNode, AtbashNode,
-    ReverseNode, ZlibNode, GzipNode, SubstringNode, RepeatNode,
+    ReverseNode, ZlibNode, GzipNode, SubstringNode, RepeatNode, TakeBytesNode,
     HexInputNode, TextInputNode, FileInputNode, OutputNode
 )
 
@@ -217,7 +217,7 @@ ALL_NODE_CLASSES = [
     # Encoding
     URLEncodeNode, HexEncodeNode, ROTNode, AtbashNode,
     # Utility
-    ReverseNode, ZlibNode, GzipNode, SubstringNode, RepeatNode,
+    ReverseNode, ZlibNode, GzipNode, SubstringNode, RepeatNode, TakeBytesNode,
     # I/O
     HexInputNode, TextInputNode, FileInputNode, OutputNode,
 ]
@@ -309,6 +309,7 @@ class GraphTab(QtWidgets.QWidget):
         util_menu.add_command('Gzip', lambda g: self.create_node('byteflow.util.GzipNode'))
         util_menu.add_command('Substring', lambda g: self.create_node('byteflow.util.SubstringNode'))
         util_menu.add_command('Repeat', lambda g: self.create_node('byteflow.util.RepeatNode'))
+        util_menu.add_command('Take Bytes', lambda g: self.create_node('byteflow.util.TakeBytesNode'))
 
     def create_node(self, node_type):
         """Create a new node at the cursor position."""
