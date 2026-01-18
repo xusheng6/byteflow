@@ -208,39 +208,47 @@ class OutputViewerPanel(QtWidgets.QWidget):
         self.viewers.clear()
 
 
-class ByteFlowApp:
-    """Main application class."""
+# List of all node classes for registration
+ALL_NODE_CLASSES = [
+    # Crypto
+    XORNode, RC4Node, AESNode, Base64Node,
+    # Hash
+    MD5Node, SHA1Node, SHA256Node,
+    # Encoding
+    URLEncodeNode, HexEncodeNode, ROTNode, AtbashNode,
+    # Utility
+    ReverseNode, ZlibNode, GzipNode, SubstringNode, RepeatNode,
+    # I/O
+    HexInputNode, TextInputNode, FileInputNode, OutputNode,
+]
 
-    def __init__(self):
-        self.app = QtWidgets.QApplication(sys.argv)
-        self.app.setApplicationName('ByteFlow')
 
-        # Auto-process flag
-        self.auto_process = True
+class GraphTab(QtWidgets.QWidget):
+    """A single tab containing a node graph and output viewer."""
 
-        # Create main window
-        self.window = QtWidgets.QMainWindow()
-        self.window.setWindowTitle('ByteFlow - Node-based Data Transformation')
-        self.window.setGeometry(100, 100, 1400, 900)
+    def __init__(self, app, parent=None):
+        super().__init__(parent)
+        self.app = app
+        self._tab_name = 'Untitled'
 
         # Create node graph
         self.graph = NodeGraph()
 
-        # Register custom nodes
-        self.register_nodes()
+        # Register nodes
+        for node_class in ALL_NODE_CLASSES:
+            self.graph.register_node(node_class)
 
-        # Create central widget
-        central = QtWidgets.QWidget()
-        layout = QtWidgets.QVBoxLayout(central)
+        # Layout
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
 
-        # Create horizontal splitter for graph and output viewer (viewer on right)
+        # Horizontal splitter for graph and output viewer
         splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
 
         # Node graph widget
-        graph_widget = self.graph.widget
-        splitter.addWidget(graph_widget)
+        splitter.addWidget(self.graph.widget)
 
-        # Output viewer panel (on the right)
+        # Output viewer panel
         self.output_viewer = OutputViewerPanel()
         self.output_viewer.setMinimumWidth(300)
         splitter.addWidget(self.output_viewer)
@@ -248,54 +256,7 @@ class ByteFlowApp:
         splitter.setSizes([900, 400])
         layout.addWidget(splitter)
 
-        # Button bar
-        btn_layout = QtWidgets.QHBoxLayout()
-
-        process_btn = QtWidgets.QPushButton('Process (F5)')
-        process_btn.clicked.connect(self.process_graph)
-        process_btn.setShortcut(QtGui.QKeySequence('F5'))
-        btn_layout.addWidget(process_btn)
-
-        # Auto-process checkbox (enabled by default)
-        self.auto_checkbox = QtWidgets.QCheckBox('Auto')
-        self.auto_checkbox.setToolTip('Automatically process when changes are made')
-        self.auto_checkbox.setChecked(True)
-        self.auto_checkbox.toggled.connect(self.on_auto_process_toggled)
-        btn_layout.addWidget(self.auto_checkbox)
-
-        clear_btn = QtWidgets.QPushButton('Clear')
-        clear_btn.clicked.connect(self.clear_graph)
-        btn_layout.addWidget(clear_btn)
-
-        fit_btn = QtWidgets.QPushButton('Fit View (F)')
-        fit_btn.clicked.connect(self.fit_to_view)
-        fit_btn.setShortcut(QtGui.QKeySequence('F'))
-        btn_layout.addWidget(fit_btn)
-
-        btn_layout.addSpacing(20)
-
-        save_btn = QtWidgets.QPushButton('Save')
-        save_btn.clicked.connect(self.save_graph)
-        save_btn.setShortcut(QtGui.QKeySequence.Save)
-        btn_layout.addWidget(save_btn)
-
-        load_btn = QtWidgets.QPushButton('Load')
-        load_btn.clicked.connect(self.load_graph)
-        load_btn.setShortcut(QtGui.QKeySequence.Open)
-        btn_layout.addWidget(load_btn)
-
-        # Delete shortcut
-        delete_action = QtGui.QAction(self.window)
-        delete_action.setShortcuts([QtGui.QKeySequence.Delete, QtGui.QKeySequence('Backspace')])
-        delete_action.triggered.connect(self.delete_selected)
-        self.window.addAction(delete_action)
-
-        btn_layout.addStretch()
-        layout.addLayout(btn_layout)
-
-        self.window.setCentralWidget(central)
-
-        # Setup custom context menu
+        # Setup context menu
         self.setup_context_menu()
 
         # Connect signals
@@ -304,42 +265,11 @@ class ByteFlowApp:
         self.graph.node_double_clicked.connect(self.on_node_double_clicked)
         self.graph.property_changed.connect(self.on_property_changed)
 
-        # Enable left-click drag to pan the view
+        # Enable left-click panning
         viewer = self.graph.viewer()
         if viewer:
             self.pan_filter = PanEventFilter(viewer)
             viewer.viewport().installEventFilter(self.pan_filter)
-
-        # Create a demo graph
-        self.create_demo_graph()
-
-    def register_nodes(self):
-        """Register all custom nodes."""
-        # Crypto
-        self.graph.register_node(XORNode)
-        self.graph.register_node(RC4Node)
-        self.graph.register_node(AESNode)
-        self.graph.register_node(Base64Node)
-        # Hash
-        self.graph.register_node(MD5Node)
-        self.graph.register_node(SHA1Node)
-        self.graph.register_node(SHA256Node)
-        # Encoding
-        self.graph.register_node(URLEncodeNode)
-        self.graph.register_node(HexEncodeNode)
-        self.graph.register_node(ROTNode)
-        self.graph.register_node(AtbashNode)
-        # Utility
-        self.graph.register_node(ReverseNode)
-        self.graph.register_node(ZlibNode)
-        self.graph.register_node(GzipNode)
-        self.graph.register_node(SubstringNode)
-        self.graph.register_node(RepeatNode)
-        # I/O
-        self.graph.register_node(HexInputNode)
-        self.graph.register_node(TextInputNode)
-        self.graph.register_node(FileInputNode)
-        self.graph.register_node(OutputNode)
 
     def setup_context_menu(self):
         """Setup right-click context menu for creating nodes."""
@@ -387,23 +317,15 @@ class ByteFlowApp:
         if viewer:
             pos = viewer.mapToScene(viewer.rect().center())
             node.set_pos(pos.x(), pos.y())
-        if self.auto_process:
+        if self.app.auto_process:
             self.process_graph()
         return node
-
-    def on_auto_process_toggled(self, checked):
-        """Handle auto-process checkbox toggle."""
-        self.auto_process = checked
-        if checked:
-            self.process_graph()
 
     def process_graph(self):
         """Process all output nodes in the graph."""
         for node in self.graph.all_nodes():
             if isinstance(node, OutputNode):
                 node.process()
-
-        # Update output viewer with first output node's data
         self.update_output_viewer()
 
     def update_output_viewer(self):
@@ -415,33 +337,6 @@ class ByteFlowApp:
         """Clear all nodes from the graph."""
         self.graph.clear_session()
         self.output_viewer.clear()
-
-    def save_graph(self):
-        """Save the graph to a JSON file."""
-        file_path, _ = QtWidgets.QFileDialog.getSaveFileName(
-            self.window,
-            'Save Graph',
-            '',
-            'ByteFlow Graph (*.json);;All Files (*)'
-        )
-        if file_path:
-            if not file_path.endswith('.json'):
-                file_path += '.json'
-            self.graph.save_session(file_path)
-
-    def load_graph(self):
-        """Load a graph from a JSON file."""
-        file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self.window,
-            'Load Graph',
-            '',
-            'ByteFlow Graph (*.json);;All Files (*)'
-        )
-        if file_path:
-            self.graph.load_session(file_path)
-            QtCore.QTimer.singleShot(100, self.update_all_node_properties)
-            if self.auto_process:
-                QtCore.QTimer.singleShot(150, self.process_graph)
 
     def fit_to_view(self):
         """Fit all nodes in the view."""
@@ -473,21 +368,21 @@ class ByteFlowApp:
         if selected:
             for node in selected:
                 self.graph.remove_node(node)
-        if self.auto_process:
+        if self.app.auto_process:
             self.process_graph()
 
     def on_port_connected(self, input_port, output_port):
         """Handle port connection."""
         node = input_port.node()
         self.update_node_property_state(node)
-        if self.auto_process:
+        if self.app.auto_process:
             self.process_graph()
 
     def on_port_disconnected(self, input_port, output_port):
         """Handle port disconnection."""
         node = input_port.node()
         self.update_node_property_state(node)
-        if self.auto_process:
+        if self.app.auto_process:
             self.process_graph()
 
     def on_node_double_clicked(self, node_id):
@@ -498,12 +393,12 @@ class ByteFlowApp:
 
     def on_property_changed(self, node_id, prop_name, prop_value):
         """Handle property change - trigger auto-process."""
-        if self.auto_process:
+        if self.app.auto_process:
             self.process_graph()
 
     def show_properties_dialog(self, node):
         """Show a properties dialog for the node."""
-        dialog = QtWidgets.QDialog(self.window)
+        dialog = QtWidgets.QDialog(self)
         dialog.setWindowTitle(f'Properties: {node.name()}')
         dialog.setMinimumWidth(350)
 
@@ -552,7 +447,7 @@ class ByteFlowApp:
                 if widget.isEnabled():
                     node.set_property(prop_name, widget.text())
             dialog.accept()
-            if self.auto_process:
+            if self.app.auto_process:
                 self.process_graph()
 
         ok_btn.clicked.connect(apply_changes)
@@ -588,26 +483,252 @@ class ByteFlowApp:
         for node in self.graph.all_nodes():
             self.update_node_property_state(node)
 
-    def create_demo_graph(self):
-        """Create a demo graph showing XOR operation."""
-        text_input = self.graph.create_node('byteflow.io.TextInputNode')
+
+class ByteFlowApp:
+    """Main application class."""
+
+    def __init__(self):
+        self.app = QtWidgets.QApplication(sys.argv)
+        self.app.setApplicationName('ByteFlow')
+
+        # Auto-process flag
+        self.auto_process = True
+
+        # Tab counter for naming
+        self._tab_counter = 0
+
+        # Create main window
+        self.window = QtWidgets.QMainWindow()
+        self.window.setWindowTitle('ByteFlow - Node-based Data Transformation')
+        self.window.setGeometry(100, 100, 1400, 900)
+
+        # Create central widget
+        central = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout(central)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        # Tab widget
+        self.tab_widget = QtWidgets.QTabWidget()
+        self.tab_widget.setTabsClosable(True)
+        self.tab_widget.setMovable(True)
+        self.tab_widget.tabCloseRequested.connect(self.close_tab)
+        layout.addWidget(self.tab_widget)
+
+        # Button bar
+        btn_layout = QtWidgets.QHBoxLayout()
+        btn_layout.setContentsMargins(5, 5, 5, 5)
+
+        new_tab_btn = QtWidgets.QPushButton('New Tab (Ctrl+T)')
+        new_tab_btn.clicked.connect(self.new_tab)
+        btn_layout.addWidget(new_tab_btn)
+
+        process_btn = QtWidgets.QPushButton('Process (F5)')
+        process_btn.clicked.connect(self.process_current)
+        btn_layout.addWidget(process_btn)
+
+        # Auto-process checkbox (enabled by default)
+        self.auto_checkbox = QtWidgets.QCheckBox('Auto')
+        self.auto_checkbox.setToolTip('Automatically process when changes are made')
+        self.auto_checkbox.setChecked(True)
+        self.auto_checkbox.toggled.connect(self.on_auto_process_toggled)
+        btn_layout.addWidget(self.auto_checkbox)
+
+        clear_btn = QtWidgets.QPushButton('Clear')
+        clear_btn.clicked.connect(self.clear_current)
+        btn_layout.addWidget(clear_btn)
+
+        fit_btn = QtWidgets.QPushButton('Fit View (F)')
+        fit_btn.clicked.connect(self.fit_current)
+        btn_layout.addWidget(fit_btn)
+
+        btn_layout.addSpacing(20)
+
+        save_btn = QtWidgets.QPushButton('Save')
+        save_btn.clicked.connect(self.save_current)
+        btn_layout.addWidget(save_btn)
+
+        load_btn = QtWidgets.QPushButton('Load')
+        load_btn.clicked.connect(self.load_graph)
+        btn_layout.addWidget(load_btn)
+
+        btn_layout.addStretch()
+        layout.addLayout(btn_layout)
+
+        self.window.setCentralWidget(central)
+
+        # Setup shortcuts
+        self._setup_shortcuts()
+
+        # Create initial tab with demo graph
+        self.new_tab(demo=True)
+
+    def _setup_shortcuts(self):
+        """Setup keyboard shortcuts."""
+        # New tab
+        new_tab_action = QtGui.QAction(self.window)
+        new_tab_action.setShortcut(QtGui.QKeySequence('Ctrl+T'))
+        new_tab_action.triggered.connect(self.new_tab)
+        self.window.addAction(new_tab_action)
+
+        # Close tab
+        close_tab_action = QtGui.QAction(self.window)
+        close_tab_action.setShortcut(QtGui.QKeySequence('Ctrl+W'))
+        close_tab_action.triggered.connect(self.close_current_tab)
+        self.window.addAction(close_tab_action)
+
+        # Process
+        process_action = QtGui.QAction(self.window)
+        process_action.setShortcut(QtGui.QKeySequence('F5'))
+        process_action.triggered.connect(self.process_current)
+        self.window.addAction(process_action)
+
+        # Fit view
+        fit_action = QtGui.QAction(self.window)
+        fit_action.setShortcut(QtGui.QKeySequence('F'))
+        fit_action.triggered.connect(self.fit_current)
+        self.window.addAction(fit_action)
+
+        # Save
+        save_action = QtGui.QAction(self.window)
+        save_action.setShortcut(QtGui.QKeySequence.Save)
+        save_action.triggered.connect(self.save_current)
+        self.window.addAction(save_action)
+
+        # Load
+        load_action = QtGui.QAction(self.window)
+        load_action.setShortcut(QtGui.QKeySequence.Open)
+        load_action.triggered.connect(self.load_graph)
+        self.window.addAction(load_action)
+
+        # Delete
+        delete_action = QtGui.QAction(self.window)
+        delete_action.setShortcuts([QtGui.QKeySequence.Delete, QtGui.QKeySequence('Backspace')])
+        delete_action.triggered.connect(self.delete_selected_current)
+        self.window.addAction(delete_action)
+
+    def current_tab(self) -> GraphTab:
+        """Get the current tab."""
+        return self.tab_widget.currentWidget()
+
+    def new_tab(self, demo=False):
+        """Create a new tab."""
+        self._tab_counter += 1
+        tab = GraphTab(self)
+        name = f'Graph {self._tab_counter}'
+        self.tab_widget.addTab(tab, name)
+        self.tab_widget.setCurrentWidget(tab)
+
+        if demo:
+            self._create_demo_graph(tab)
+
+        return tab
+
+    def close_tab(self, index):
+        """Close a tab by index."""
+        if self.tab_widget.count() > 1:
+            widget = self.tab_widget.widget(index)
+            self.tab_widget.removeTab(index)
+            widget.deleteLater()
+        else:
+            # Don't close the last tab, just clear it
+            self.current_tab().clear_graph()
+
+    def close_current_tab(self):
+        """Close the current tab."""
+        self.close_tab(self.tab_widget.currentIndex())
+
+    def on_auto_process_toggled(self, checked):
+        """Handle auto-process checkbox toggle."""
+        self.auto_process = checked
+        if checked:
+            tab = self.current_tab()
+            if tab:
+                tab.process_graph()
+
+    def process_current(self):
+        """Process the current tab's graph."""
+        tab = self.current_tab()
+        if tab:
+            tab.process_graph()
+
+    def clear_current(self):
+        """Clear the current tab's graph."""
+        tab = self.current_tab()
+        if tab:
+            tab.clear_graph()
+
+    def fit_current(self):
+        """Fit view in the current tab."""
+        tab = self.current_tab()
+        if tab:
+            tab.fit_to_view()
+
+    def delete_selected_current(self):
+        """Delete selected nodes in the current tab."""
+        tab = self.current_tab()
+        if tab:
+            tab.delete_selected()
+
+    def save_current(self):
+        """Save the current tab's graph."""
+        tab = self.current_tab()
+        if not tab:
+            return
+
+        file_path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self.window,
+            'Save Graph',
+            '',
+            'ByteFlow Graph (*.json);;All Files (*)'
+        )
+        if file_path:
+            if not file_path.endswith('.json'):
+                file_path += '.json'
+            tab.graph.save_session(file_path)
+            # Update tab name
+            import os
+            name = os.path.basename(file_path)
+            self.tab_widget.setTabText(self.tab_widget.currentIndex(), name)
+
+    def load_graph(self):
+        """Load a graph into a new tab."""
+        file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self.window,
+            'Load Graph',
+            '',
+            'ByteFlow Graph (*.json);;All Files (*)'
+        )
+        if file_path:
+            tab = self.new_tab()
+            tab.graph.load_session(file_path)
+            # Update tab name
+            import os
+            name = os.path.basename(file_path)
+            self.tab_widget.setTabText(self.tab_widget.currentIndex(), name)
+            QtCore.QTimer.singleShot(100, tab.update_all_node_properties)
+            if self.auto_process:
+                QtCore.QTimer.singleShot(150, tab.process_graph)
+
+    def _create_demo_graph(self, tab):
+        """Create a demo graph in the given tab."""
+        text_input = tab.graph.create_node('byteflow.io.TextInputNode')
         text_input.set_name('Input Text')
         text_input.set_pos(-200, 0)
         text_input.set_property('text_data', 'Hello ByteFlow!')
 
-        xor_node = self.graph.create_node('byteflow.crypto.XORNode')
+        xor_node = tab.graph.create_node('byteflow.crypto.XORNode')
         xor_node.set_name('XOR Encrypt')
         xor_node.set_pos(100, 0)
         xor_node.set_property('key_hex', 'FF')
 
-        output = self.graph.create_node('byteflow.io.OutputNode')
+        output = tab.graph.create_node('byteflow.io.OutputNode')
         output.set_name('Result')
         output.set_pos(400, 0)
 
         text_input.output(0).connect_to(xor_node.input(0))
         xor_node.output(0).connect_to(output.input(0))
 
-        QtCore.QTimer.singleShot(100, self.fit_to_view)
+        QtCore.QTimer.singleShot(100, tab.fit_to_view)
 
     def run(self):
         """Run the application."""
