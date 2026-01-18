@@ -10,3 +10,4 @@ venv/
 .idea/
 *.swp
 *.swo
+*.json
