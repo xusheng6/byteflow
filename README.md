@@ -2,6 +2,10 @@
 
 A node-based data transformation tool, inspired by CyberChef but with a visual node graph interface.
 
+> **Note**: This is a toy project in alpha state. Use at your own risk.
+
+![ByteFlow Screenshot](screenshot.png)
+
 ## Features
 
 - **Visual Node Graph**: Build data transformation pipelines by connecting nodes
@@ -35,3 +39,7 @@ python main.py
 - PySide6
 - NodeGraphQt
 - pycryptodome
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
