@@ -512,6 +512,14 @@ class ByteFlowApp:
         self.tab_widget.setTabsClosable(True)
         self.tab_widget.setMovable(True)
         self.tab_widget.tabCloseRequested.connect(self.close_tab)
+
+        # Add "+" button for new tab (like browsers)
+        new_tab_btn = QtWidgets.QToolButton()
+        new_tab_btn.setText('+')
+        new_tab_btn.setFixedSize(24, 24)
+        new_tab_btn.clicked.connect(self.new_tab)
+        self.tab_widget.setCornerWidget(new_tab_btn, QtCore.Qt.TopRightCorner)
+
         layout.addWidget(self.tab_widget)
 
         # Button bar
