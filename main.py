@@ -3,7 +3,7 @@
 
 import sys
 from PySide6 import QtWidgets, QtCore, QtGui
-from NodeGraphQt import NodeGraph, PropertiesBinWidget
+from NodeGraphQt import NodeGraph
 
 from nodes import (
     XORNode, RC4Node, AESNode, Base64Node,
@@ -36,12 +36,10 @@ class PanEventFilter(QtCore.QObject):
 
         elif event_type == QtCore.QEvent.MouseMove:
             if self.panning and self.last_pos is not None:
-                # Map to scene coordinates like NodeGraphQt does internally
                 previous_pos = self.viewer.mapToScene(self.last_pos)
                 current_pos = self.viewer.mapToScene(event.pos())
                 delta = previous_pos - current_pos
                 self.last_pos = event.pos()
-                # Use NodeGraphQt's native pan method with scene delta
                 self.viewer._set_viewer_pan(delta.x(), delta.y())
                 return True
 
@@ -54,12 +52,70 @@ class PanEventFilter(QtCore.QObject):
         return False
 
 
+class OutputViewer(QtWidgets.QWidget):
+    """Panel for viewing output node contents."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        # Header
+        header = QtWidgets.QLabel('Output Viewer')
+        header.setStyleSheet('font-weight: bold; padding: 5px; background: #333; color: #fff;')
+        layout.addWidget(header)
+
+        # Info bar
+        self.info_label = QtWidgets.QLabel('No output selected')
+        self.info_label.setStyleSheet('padding: 3px; background: #2a2a2a; color: #aaa;')
+        layout.addWidget(self.info_label)
+
+        # Text display
+        self.text_display = QtWidgets.QPlainTextEdit()
+        self.text_display.setReadOnly(True)
+        self.text_display.setFont(QtGui.QFont('Menlo', 11))
+        self.text_display.setStyleSheet('background: #1e1e1e; color: #ddd;')
+        layout.addWidget(self.text_display)
+
+    def show_data(self, data: bytes, node_name: str = ''):
+        """Display data in the viewer."""
+        if not data:
+            self.info_label.setText(f'{node_name}: empty')
+            self.text_display.setPlainText('')
+            return
+
+        # Show info
+        self.info_label.setText(f'{node_name}: {len(data)} bytes')
+
+        # Try to decode as text, fall back to hex representation
+        try:
+            text = data.decode('utf-8')
+            self.text_display.setPlainText(text)
+        except UnicodeDecodeError:
+            # Show as hex dump for binary data
+            hex_lines = []
+            for i in range(0, len(data), 16):
+                chunk = data[i:i+16]
+                hex_part = ' '.join(f'{b:02x}' for b in chunk)
+                ascii_part = ''.join(chr(b) if 32 <= b < 127 else '.' for b in chunk)
+                hex_lines.append(f'{i:08x}  {hex_part:<48}  {ascii_part}')
+            self.text_display.setPlainText('\n'.join(hex_lines))
+
+    def clear(self):
+        """Clear the viewer."""
+        self.info_label.setText('No output selected')
+        self.text_display.setPlainText('')
+
+
 class ByteFlowApp:
     """Main application class."""
 
     def __init__(self):
         self.app = QtWidgets.QApplication(sys.argv)
         self.app.setApplicationName('ByteFlow')
+
+        # Auto-process flag
+        self.auto_process = False
 
         # Create main window
         self.window = QtWidgets.QMainWindow()
@@ -72,42 +128,37 @@ class ByteFlowApp:
         # Register custom nodes
         self.register_nodes()
 
-        # Create central widget with splitter
+        # Create central widget
         central = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(central)
 
-        # Create splitter for graph and properties
-        splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
+        # Create vertical splitter for graph and output viewer
+        splitter = QtWidgets.QSplitter(QtCore.Qt.Vertical)
 
         # Node graph widget
         graph_widget = self.graph.widget
         splitter.addWidget(graph_widget)
 
-        # Properties panel with title
-        props_container = QtWidgets.QWidget()
-        props_layout = QtWidgets.QVBoxLayout(props_container)
-        props_layout.setContentsMargins(0, 0, 0, 0)
+        # Output viewer panel
+        self.output_viewer = OutputViewer()
+        splitter.addWidget(self.output_viewer)
 
-        props_label = QtWidgets.QLabel('Node Properties')
-        props_label.setStyleSheet('font-weight: bold; padding: 5px; background: #333; color: #fff;')
-        props_layout.addWidget(props_label)
-
-        self.props_bin = PropertiesBinWidget(node_graph=self.graph)
-        props_layout.addWidget(self.props_bin)
-
-        props_container.setMinimumWidth(300)
-        splitter.addWidget(props_container)
-
-        splitter.setSizes([1000, 400])
+        splitter.setSizes([600, 200])
         layout.addWidget(splitter)
 
-        # Process button
+        # Button bar
         btn_layout = QtWidgets.QHBoxLayout()
 
         process_btn = QtWidgets.QPushButton('Process (F5)')
         process_btn.clicked.connect(self.process_graph)
         process_btn.setShortcut(QtGui.QKeySequence('F5'))
         btn_layout.addWidget(process_btn)
+
+        # Auto-process checkbox
+        self.auto_checkbox = QtWidgets.QCheckBox('Auto')
+        self.auto_checkbox.setToolTip('Automatically process when changes are made')
+        self.auto_checkbox.toggled.connect(self.on_auto_process_toggled)
+        btn_layout.addWidget(self.auto_checkbox)
 
         clear_btn = QtWidgets.QPushButton('Clear')
         clear_btn.clicked.connect(self.clear_graph)
@@ -144,9 +195,11 @@ class ByteFlowApp:
         # Setup custom context menu
         self.setup_context_menu()
 
-        # Connect to port connection signals to update property states
+        # Connect signals
         self.graph.port_connected.connect(self.on_port_connected)
         self.graph.port_disconnected.connect(self.on_port_disconnected)
+        self.graph.node_double_clicked.connect(self.on_node_double_clicked)
+        self.graph.node_selected.connect(self.on_node_selected)
 
         # Enable left-click drag to pan the view
         viewer = self.graph.viewer()
@@ -187,7 +240,6 @@ class ByteFlowApp:
 
     def setup_context_menu(self):
         """Setup right-click context menu for creating nodes."""
-        # Get NodeGraphQt's built-in graph context menu
         graph_menu = self.graph.get_context_menu('graph')
 
         # I/O submenu
@@ -228,30 +280,52 @@ class ByteFlowApp:
     def create_node(self, node_type):
         """Create a new node at the cursor position."""
         node = self.graph.create_node(node_type)
-        # Position at center of current view if no cursor pos available
         viewer = self.graph.viewer()
         if viewer:
             pos = viewer.mapToScene(viewer.rect().center())
             node.set_pos(pos.x(), pos.y())
+        if self.auto_process:
+            self.process_graph()
         return node
+
+    def on_auto_process_toggled(self, checked):
+        """Handle auto-process checkbox toggle."""
+        self.auto_process = checked
+        if checked:
+            self.process_graph()
 
     def process_graph(self):
         """Process all output nodes in the graph."""
         for node in self.graph.all_nodes():
             if isinstance(node, OutputNode):
                 node.process()
+
+        # Update output viewer with first output node's data
+        self.update_output_viewer()
+
+    def update_output_viewer(self):
+        """Update output viewer with selected or first output node."""
+        # Try selected nodes first
+        selected = self.graph.selected_nodes()
+        for node in selected:
+            if isinstance(node, OutputNode):
                 data = node.get_data()
-                print(f"Output '{node.name()}': {len(data)} bytes")
-                if data:
-                    print(f"  Hex: {data.hex()}")
-                    try:
-                        print(f"  Text: {data.decode('utf-8', errors='replace')}")
-                    except:
-                        pass
+                self.output_viewer.show_data(data, node.name())
+                return
+
+        # Fall back to first output node
+        for node in self.graph.all_nodes():
+            if isinstance(node, OutputNode):
+                data = node.get_data()
+                self.output_viewer.show_data(data, node.name())
+                return
+
+        self.output_viewer.clear()
 
     def clear_graph(self):
         """Clear all nodes from the graph."""
         self.graph.clear_session()
+        self.output_viewer.clear()
 
     def save_graph(self):
         """Save the graph to a JSON file."""
@@ -276,8 +350,9 @@ class ByteFlowApp:
         )
         if file_path:
             self.graph.load_session(file_path)
-            # Update all nodes' property states after loading
             QtCore.QTimer.singleShot(100, self.update_all_node_properties)
+            if self.auto_process:
+                QtCore.QTimer.singleShot(150, self.process_graph)
 
     def fit_to_view(self):
         """Fit all nodes in the view."""
@@ -289,7 +364,6 @@ class ByteFlowApp:
         if not viewer:
             return
 
-        # Calculate bounding rect from node view items
         from PySide6.QtCore import QRectF
         rect = QRectF()
         for node in all_nodes:
@@ -299,11 +373,8 @@ class ByteFlowApp:
         if rect.isNull():
             return
 
-        # Add padding
         padding = 50
         rect.adjust(-padding, -padding, padding, padding)
-
-        # Update NodeGraphQt's internal scene range so panning works correctly
         viewer._scene_range = rect
         viewer._update_scene()
 
@@ -313,16 +384,94 @@ class ByteFlowApp:
         if selected:
             for node in selected:
                 self.graph.remove_node(node)
+        if self.auto_process:
+            self.process_graph()
 
     def on_port_connected(self, input_port, output_port):
-        """Handle port connection - disable corresponding property widget."""
+        """Handle port connection."""
         node = input_port.node()
         self.update_node_property_state(node)
+        if self.auto_process:
+            self.process_graph()
 
     def on_port_disconnected(self, input_port, output_port):
-        """Handle port disconnection - re-enable corresponding property widget."""
+        """Handle port disconnection."""
         node = input_port.node()
         self.update_node_property_state(node)
+        if self.auto_process:
+            self.process_graph()
+
+    def on_node_double_clicked(self, node_id):
+        """Handle node double-click - show properties dialog."""
+        node = self.graph.get_node_by_id(node_id)
+        if node:
+            self.show_properties_dialog(node)
+
+    def on_node_selected(self, node_id):
+        """Handle node selection - update output viewer if output node."""
+        node = self.graph.get_node_by_id(node_id)
+        if node and isinstance(node, OutputNode):
+            data = node.get_data()
+            self.output_viewer.show_data(data, node.name())
+
+    def show_properties_dialog(self, node):
+        """Show a properties dialog for the node."""
+        dialog = QtWidgets.QDialog(self.window)
+        dialog.setWindowTitle(f'Properties: {node.name()}')
+        dialog.setMinimumWidth(350)
+
+        layout = QtWidgets.QVBoxLayout(dialog)
+
+        # Create property widgets
+        props = node.model.custom_properties
+        widgets = {}
+
+        for prop_name, prop_value in props.items():
+            row = QtWidgets.QHBoxLayout()
+            label = QtWidgets.QLabel(prop_name + ':')
+            label.setMinimumWidth(80)
+            row.addWidget(label)
+
+            # Check if this property has a connected port
+            is_connected = False
+            if hasattr(node, 'PORT_TO_PROPERTY'):
+                for port_name, mapped_prop in node.PORT_TO_PROPERTY.items():
+                    if mapped_prop == prop_name:
+                        input_port = node.get_input(port_name)
+                        if input_port and input_port.connected_ports():
+                            is_connected = True
+                            break
+
+            if is_connected:
+                edit = QtWidgets.QLineEdit('(connected)')
+                edit.setEnabled(False)
+            else:
+                edit = QtWidgets.QLineEdit(str(prop_value))
+            widgets[prop_name] = edit
+            row.addWidget(edit)
+            layout.addLayout(row)
+
+        # Buttons
+        btn_layout = QtWidgets.QHBoxLayout()
+        ok_btn = QtWidgets.QPushButton('OK')
+        cancel_btn = QtWidgets.QPushButton('Cancel')
+        btn_layout.addStretch()
+        btn_layout.addWidget(ok_btn)
+        btn_layout.addWidget(cancel_btn)
+        layout.addLayout(btn_layout)
+
+        def apply_changes():
+            for prop_name, widget in widgets.items():
+                if widget.isEnabled():
+                    node.set_property(prop_name, widget.text())
+            dialog.accept()
+            if self.auto_process:
+                self.process_graph()
+
+        ok_btn.clicked.connect(apply_changes)
+        cancel_btn.clicked.connect(dialog.reject)
+
+        dialog.exec()
 
     def update_node_property_state(self, node):
         """Update property widget states based on port connections."""
@@ -334,20 +483,16 @@ class ByteFlowApp:
             widget = node.view.get_widget(prop_name) if node.view else None
 
             if input_port and input_port.connected_ports():
-                # Port is connected - disable widget and show indicator
                 if widget:
                     widget.setEnabled(False)
                     widget.set_value('(connected)')
             else:
-                # Port is not connected - enable widget
                 if widget:
                     widget.setEnabled(True)
-                    # Restore value from property if it was showing '(connected)'
                     if widget.get_value() == '(connected)':
-                        # Get default or stored value
                         current = node.get_property(prop_name)
                         if current == '(connected)':
-                            widget.set_value('00')  # Default fallback
+                            widget.set_value('00')
                         else:
                             widget.set_value(current)
 
@@ -358,7 +503,6 @@ class ByteFlowApp:
 
     def create_demo_graph(self):
         """Create a demo graph showing XOR operation."""
-        # Create nodes
         text_input = self.graph.create_node('byteflow.io.TextInputNode')
         text_input.set_name('Input Text')
         text_input.set_pos(-200, 0)
@@ -373,11 +517,9 @@ class ByteFlowApp:
         output.set_name('Result')
         output.set_pos(400, 0)
 
-        # Connect nodes
         text_input.output(0).connect_to(xor_node.input(0))
         xor_node.output(0).connect_to(output.input(0))
 
-        # Fit graph to view
         QtCore.QTimer.singleShot(100, self.fit_to_view)
 
     def run(self):

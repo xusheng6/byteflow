@@ -68,7 +68,7 @@ class FileInputNode(ByteFlowNode):
 
 
 class OutputNode(ByteFlowNode):
-    """Output node that displays data in hex and text formats."""
+    """Output node - data sink that sends output to the Output Viewer panel."""
 
     __identifier__ = 'byteflow.io'
     NODE_NAME = 'Output'
@@ -76,25 +76,12 @@ class OutputNode(ByteFlowNode):
     def __init__(self):
         super().__init__()
         self.add_input('input')
-        self.add_text_input('hex_output', 'Hex', text='')
-        self.add_text_input('text_output', 'Text', text='')
-        self.add_text_input('length', 'Length', text='0')
+        self._data = b''
         self.set_color(100, 100, 150)
 
     def process(self):
-        data = self.get_input_data('input')
-
-        # Update display properties
-        hex_str = data.hex() if data else ''
-        try:
-            text_str = data.decode('utf-8', errors='replace') if data else ''
-        except:
-            text_str = ''
-
-        self.set_property('hex_output', hex_str)
-        self.set_property('text_output', text_str)
-        self.set_property('length', str(len(data)))
+        self._data = self.get_input_data('input')
 
     def get_data(self) -> bytes:
         """Get the data flowing into this output node."""
-        return self.get_input_data('input')
+        return self._data
