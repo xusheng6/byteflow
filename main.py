@@ -290,11 +290,25 @@ class ByteFlowApp:
 
         for port_name, prop_name in node.PORT_TO_PROPERTY.items():
             input_port = node.get_input(port_name)
+            widget = node.view.get_widget(prop_name) if node.view else None
+
             if input_port and input_port.connected_ports():
-                # Port is connected - disable property and show indicator
-                node.set_property(prop_name, '[connected]')
-                node.set_disabled(True) if hasattr(node, 'set_disabled') else None
-            # Note: We don't re-enable here to preserve user's manual input
+                # Port is connected - disable widget and show indicator
+                if widget:
+                    widget.setEnabled(False)
+                    widget.set_value('(connected)')
+            else:
+                # Port is not connected - enable widget
+                if widget:
+                    widget.setEnabled(True)
+                    # Restore value from property if it was showing '(connected)'
+                    if widget.get_value() == '(connected)':
+                        # Get default or stored value
+                        current = node.get_property(prop_name)
+                        if current == '(connected)':
+                            widget.set_value('00')  # Default fallback
+                        else:
+                            widget.set_value(current)
 
     def update_all_node_properties(self):
         """Update all nodes' property states after loading."""
