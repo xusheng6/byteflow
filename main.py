@@ -106,7 +106,7 @@ class SingleOutputViewer(QtWidgets.QWidget):
         # Text display
         self.text_display = QtWidgets.QPlainTextEdit()
         self.text_display.setReadOnly(True)
-        self.text_display.setFont(QtGui.QFont('Menlo', 14))
+        self.text_display.setFont(QtGui.QFont('Menlo', 16))
         self.text_display.setStyleSheet('background: #1e1e1e; color: #ddd;')
         layout.addWidget(self.text_display)
 
@@ -216,7 +216,7 @@ class ByteFlowApp:
         self.app.setApplicationName('ByteFlow')
 
         # Auto-process flag
-        self.auto_process = False
+        self.auto_process = True
 
         # Create main window
         self.window = QtWidgets.QMainWindow()
@@ -256,9 +256,10 @@ class ByteFlowApp:
         process_btn.setShortcut(QtGui.QKeySequence('F5'))
         btn_layout.addWidget(process_btn)
 
-        # Auto-process checkbox
+        # Auto-process checkbox (enabled by default)
         self.auto_checkbox = QtWidgets.QCheckBox('Auto')
         self.auto_checkbox.setToolTip('Automatically process when changes are made')
+        self.auto_checkbox.setChecked(True)
         self.auto_checkbox.toggled.connect(self.on_auto_process_toggled)
         btn_layout.addWidget(self.auto_checkbox)
 
