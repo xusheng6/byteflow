@@ -13,6 +13,7 @@ class HexInputNode(ByteFlowNode):
         super().__init__()
         self.add_output('output')
         self.add_text_input('hex_data', 'Hex Data', text='48656c6c6f')
+        self.add_display('length', 'Length', '0 bytes')
         self.set_color(200, 150, 50)
 
     def process(self):
@@ -21,6 +22,7 @@ class HexInputNode(ByteFlowNode):
             data = bytes.fromhex(hex_str.replace(' ', '').replace('\n', ''))
         except ValueError:
             data = b''
+        self.set_display('length', f'{len(data)} bytes')
         self.set_output_data('output', data)
 
 
@@ -34,11 +36,14 @@ class TextInputNode(ByteFlowNode):
         super().__init__()
         self.add_output('output')
         self.add_text_input('text_data', 'Text', text='Hello')
+        self.add_display('length', 'Length', '0 bytes')
         self.set_color(200, 180, 50)
 
     def process(self):
         text = self.get_property('text_data')
-        self.set_output_data('output', text.encode('utf-8'))
+        data = text.encode('utf-8')
+        self.set_display('length', f'{len(data)} bytes')
+        self.set_output_data('output', data)
 
 
 class FileInputNode(ByteFlowNode):
@@ -51,19 +56,23 @@ class FileInputNode(ByteFlowNode):
         super().__init__()
         self.add_output('output')
         self.add_text_input('file_path', 'File Path', text='')
+        self.add_display('length', 'Length', '0 bytes')
         self.set_color(200, 100, 50)
 
     def process(self):
         path = self.get_property('file_path')
         if not path:
+            self.set_display('length', '0 bytes')
             self.set_output_data('output', b'')
             return
         try:
             with open(path, 'rb') as f:
                 data = f.read()
+            self.set_display('length', f'{len(data)} bytes')
             self.set_output_data('output', data)
         except Exception as e:
             print(f"File read error: {e}")
+            self.set_display('length', 'error')
             self.set_output_data('output', b'')
 
 
@@ -78,8 +87,8 @@ class OutputNode(ByteFlowNode):
     def __init__(self):
         super().__init__()
         self.add_input('input')
-        self.add_text_input('length', 'Length', text='0 bytes')
-        self.add_text_input('preview', 'Preview', text='')
+        self.add_display('length', 'Length', '0 bytes')
+        self.add_display('preview', 'Preview', '')
         self._data = b''
         self.set_color(100, 100, 150)
 
@@ -88,7 +97,7 @@ class OutputNode(ByteFlowNode):
 
         # Update length display
         length = len(self._data)
-        self.set_property('length', f'{length} bytes')
+        self.set_display('length', f'{length} bytes')
 
         # Update preview - show raw bytes as text
         if self._data:
@@ -97,9 +106,9 @@ class OutputNode(ByteFlowNode):
             preview = preview_data.decode('latin-1')
             if len(self._data) > self.PREVIEW_BYTES:
                 preview += '...'
-            self.set_property('preview', preview)
+            self.set_display('preview', preview)
         else:
-            self.set_property('preview', '')
+            self.set_display('preview', '')
 
     def get_data(self) -> bytes:
         """Get the data flowing into this output node."""

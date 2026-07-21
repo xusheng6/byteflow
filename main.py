@@ -492,6 +492,11 @@ class ByteFlowApp:
         self.app = QtWidgets.QApplication(sys.argv)
         self.app.setApplicationName('ByteFlow')
 
+        # Use Fusion style for consistent rendering. The native macOS style
+        # misrenders QComboBox widgets embedded in the node graph (selected
+        # text draws outside the box); Fusion renders them correctly.
+        self.app.setStyle('Fusion')
+
         # Set larger font for UI widgets
         font = self.app.font()
         font.setPointSize(14)
@@ -742,26 +747,31 @@ class ByteFlowApp:
                 QtCore.QTimer.singleShot(150, tab.process_graph)
 
     def _create_demo_graph(self, tab):
-        """Create a demo graph in the given tab."""
-        text_input = tab.graph.create_node('byteflow.io.TextInputNode')
-        text_input.set_name('Input Text')
-        text_input.set_pos(-200, 0)
-        text_input.set_property('text_data', 'Hello ByteFlow!')
+        """Create a demo graph in the given tab.
+
+        Demo: XOR decryption that reveals "Hello ByteFlow!"
+        Encrypted data (XOR'd with 0xFF) -> XOR with key 0xFF -> "Hello ByteFlow!"
+        """
+        # Encrypted data: "Hello ByteFlow!" XOR'd with 0xFF
+        data_input = tab.graph.create_node('byteflow.io.HexInputNode')
+        data_input.set_name('Encrypted Data')
+        data_input.set_pos(-250, -50)
+        data_input.set_property('hex_data', 'b79a939390dfbd868b9ab9939088de')
 
         key_input = tab.graph.create_node('byteflow.io.HexInputNode')
         key_input.set_name('Key')
-        key_input.set_pos(-200, 100)
+        key_input.set_pos(-250, 150)
         key_input.set_property('hex_data', 'FF')
 
         xor_node = tab.graph.create_node('byteflow.crypto.XORNode')
-        xor_node.set_name('XOR')
+        xor_node.set_name('XOR Decrypt')
         xor_node.set_pos(100, 50)
 
         output = tab.graph.create_node('byteflow.io.OutputNode')
-        output.set_name('Result')
+        output.set_name('Decrypted')
         output.set_pos(350, 50)
 
-        text_input.output(0).connect_to(xor_node.input(0))  # data
+        data_input.output(0).connect_to(xor_node.input(0))  # data
         key_input.output(0).connect_to(xor_node.input(1))   # key
         xor_node.output(0).connect_to(output.input(0))
 
